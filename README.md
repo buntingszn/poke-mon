@@ -38,11 +38,13 @@ TTY, so the local terminal stack can surface the alert.
 - Sends an immediate notification when a Codex turn ends
 - Repeats at `2, 5, 10, 20, 40` minutes by default
 - Cancels stale reminder loops when a new turn ends
+- Can cancel reminder loops when you submit the next prompt
 - Supports remote SSH sessions through terminal escape sequences
 - Supports tmux client TTYs
 - Uses `cmux notify` directly when available
 - Emits configurable terminal notification protocols: `osc777`, `osc9`, `bell`
 - Optionally plays a local macOS sound with `afplay`
+- Supports custom sound commands for other local setups
 - Can also be wired to Codex permission/input prompts
 
 ## Install
@@ -87,6 +89,9 @@ printf 'notify = ["%s"]\n' "$HOOK_PATH"
 
 printf '\nOptional PermissionRequest command for ~/.codex/hooks.json:\n\n'
 printf 'env REMINDER_MESSAGE='\''Waiting for input'\'' REMINDER_ONCE=1 REMINDER_STDOUT_FALLBACK=0 %s\n' "$HOOK_PATH"
+
+printf '\nOptional UserPromptSubmit cancel command for ~/.codex/hooks.json:\n\n'
+printf '%s --cancel\n' "$HOOK_PATH"
 ```
 
 ## Permission/Input Prompts
@@ -109,6 +114,16 @@ Linux:
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/YOU/.codex/hooks/poke-mon --cancel"
+          }
+        ]
+      }
     ]
   }
 }
@@ -120,12 +135,21 @@ macOS command path:
 "command": "env REMINDER_MESSAGE='Waiting for input' REMINDER_ONCE=1 REMINDER_STDOUT_FALLBACK=0 /Users/YOU/.codex/hooks/poke-mon"
 ```
 
+macOS cancel command path:
+
+```json
+"command": "/Users/YOU/.codex/hooks/poke-mon --cancel"
+```
+
 If `hooks.json` already exists, keep its existing entries and add only the
-`PermissionRequest` array under the top-level `hooks` object. Restart Codex
-after editing `hooks.json`.
+`PermissionRequest` and `UserPromptSubmit` arrays under the top-level `hooks`
+object. Restart Codex after editing `hooks.json`.
 
 `REMINDER_ONCE=1` is recommended for permission hooks because not every Codex
 version exposes a matching "prompt answered" cancellation event.
+
+`UserPromptSubmit` is optional but useful: it cancels any pending reminder loop
+as soon as you return and type the next prompt.
 
 ## Configuration
 
@@ -138,9 +162,11 @@ Configure behavior with environment variables.
 | `REMINDER_DELAYS` | `120 180 300 600 1200` | Reminder delays, in seconds |
 | `REMINDER_ONCE` | `0` | Set to `1` to send only the immediate notification |
 | `REMINDER_STATE_DIR` | `$XDG_STATE_HOME/poke-mon` or `~/.local/state/poke-mon` | State directory for token, PID, and log files |
+| `REMINDER_STATE_KEY` | unset | Optional key for isolating concurrent sessions |
 | `REMINDER_PLAY_LOCAL_SOUND` | `auto` | Set to `0`, `false`, `no`, or `off` to disable local sound |
 | `REMINDER_SOUND_FILE` | `/System/Library/Sounds/Ping.aiff` | macOS sound used with `afplay` |
 | `REMINDER_SOUND_FILES` | unset | Space-separated sound sequence for immediate + reminder notifications |
+| `REMINDER_SOUND_COMMAND` | unset | Optional shell command for custom sound playback. Receives sound file as `$1` and reminder step as `$2` |
 | `REMINDER_STDOUT_FALLBACK` | `1` | Set to `0` when stdout has protocol meaning |
 | `REMINDER_PROTOCOLS` | `osc777 osc9` | Space-separated terminal protocols: `osc777`, `osc9`, `bell` |
 | `REMINDER_CMUX_NOTIFY` | `1` | Set to `0` to skip direct `cmux notify` |
@@ -177,6 +203,24 @@ notify = ["env", "REMINDER_CMUX_NOTIFY=0", "REMINDER_PROTOCOLS=", "REMINDER_SOUN
 
 When there are more reminders than listed sounds, the final listed sound is
 reused.
+
+To isolate reminder state for a specific project or session:
+
+```toml
+notify = ["env", "REMINDER_STATE_KEY=my-project", "/Users/YOU/.codex/hooks/poke-mon"]
+```
+
+Use the same `REMINDER_STATE_KEY` on matching `PermissionRequest` or
+`UserPromptSubmit` hook commands if you configure them.
+
+To use a custom local sound player instead of `afplay`:
+
+```toml
+notify = ["env", "REMINDER_SOUND_FILE=/usr/share/sounds/freedesktop/stereo/complete.oga", "REMINDER_SOUND_COMMAND=paplay \"$1\"", "/home/YOU/.codex/hooks/poke-mon"]
+```
+
+The custom command receives the selected sound file as `$1` and the reminder
+step as `$2`. It runs in the background during normal notifications.
 
 ## tmux
 
@@ -219,11 +263,33 @@ Cancel any active reminder loop:
 ~/.codex/hooks/poke-mon --cancel
 ```
 
+Preview the configured sound sequence:
+
+```bash
+~/.codex/hooks/poke-mon --test-sounds
+```
+
+Preview a fixed number of sound steps:
+
+```bash
+~/.codex/hooks/poke-mon --test-sounds 5
+```
+
 Show script help:
 
 ```bash
 ~/.codex/hooks/poke-mon --help
 ```
+
+## Scope
+
+There are larger notification projects for AI coding agents that include
+installers, CLIs, desktop notification backends, voice/TTS, push services,
+webhooks, and multi-agent dashboards.
+
+`poke-mon` intentionally does less. It is a small shell hook for people who want
+cmux-friendly terminal notifications, gentle repeat nudges, SSH/tmux delivery,
+and native macOS sounds without taking on a bigger package or service.
 
 ## Notes
 

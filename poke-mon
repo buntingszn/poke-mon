@@ -14,8 +14,10 @@ TITLE="${REMINDER_TITLE:-Codex @ $SHORT_HOST}"
 MESSAGE="${REMINDER_MESSAGE:-Turn ended}"
 DELAYS="${REMINDER_DELAYS:-$DEFAULT_DELAYS}"
 STATE_DIR="${REMINDER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/poke-mon}"
+STATE_KEY="${REMINDER_STATE_KEY:-}"
 SOUND_FILE="${REMINDER_SOUND_FILE:-$DEFAULT_SOUND_FILE}"
 SOUND_FILES="${REMINDER_SOUND_FILES:-}"
+SOUND_COMMAND="${REMINDER_SOUND_COMMAND:-}"
 PLAY_LOCAL_SOUND="${REMINDER_PLAY_LOCAL_SOUND:-auto}"
 ALLOW_STDOUT_FALLBACK="${REMINDER_STDOUT_FALLBACK:-1}"
 REMINDER_ONCE="${REMINDER_ONCE:-0}"
@@ -27,7 +29,7 @@ LOG_FILE=""
 
 usage() {
   cat <<'EOF'
-Usage: poke-mon [--cancel | --worker TOKEN | --help]
+Usage: poke-mon [--cancel | --test-sounds [COUNT] | --worker TOKEN | --help]
 
 Codex notify hook for terminal-based turn-ended reminders.
 
@@ -37,16 +39,27 @@ Environment:
   REMINDER_DELAYS            Reminder delays in seconds. Default: "120 180 300 600 1200"
   REMINDER_ONCE              Set to 1 to notify once without starting reminders.
   REMINDER_STATE_DIR         State directory. Default: $XDG_STATE_HOME or ~/.local/state
+  REMINDER_STATE_KEY         Optional key for isolating concurrent sessions.
   REMINDER_PLAY_LOCAL_SOUND  auto, 0, false, no, or off. Default: auto
   REMINDER_SOUND_FILE        macOS sound file used by afplay.
   REMINDER_SOUND_FILES       Space-separated sound sequence for immediate + reminders.
+  REMINDER_SOUND_COMMAND     Optional command. Receives sound file as $1 and step as $2.
   REMINDER_STDOUT_FALLBACK   Set to 0 for command hooks where stdout has protocol meaning.
   REMINDER_PROTOCOLS         Space-separated: osc777 osc9 bell. Default: "osc777 osc9"
   REMINDER_CMUX_NOTIFY       Set to 0 to skip direct `cmux notify`.
 EOF
 }
 
+sanitize_state_key() {
+  printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9._=-' '_'
+}
+
 init_state_dir() {
+  if [ -n "$STATE_KEY" ]; then
+    safe_state_key="$(sanitize_state_key "$STATE_KEY")"
+    STATE_DIR="$STATE_DIR/$safe_state_key"
+  fi
+
   if mkdir -p "$STATE_DIR" 2>/dev/null; then
     :
   else
@@ -133,6 +146,66 @@ sound_for_step() {
   printf '%s' "$selected"
 }
 
+sound_step_count() {
+  count=0
+
+  if [ -n "$SOUND_FILES" ]; then
+    for _candidate in $SOUND_FILES; do
+      count=$((count + 1))
+    done
+  fi
+
+  [ "$count" -gt 0 ] || count=1
+  printf '%s' "$count"
+}
+
+play_sound() {
+  step="${1:-0}"
+  mode="${2:-async}"
+
+  case "$PLAY_LOCAL_SOUND" in
+    0|false|FALSE|no|NO|off|OFF)
+      return 0
+      ;;
+  esac
+
+  step_sound="$(sound_for_step "$step")"
+
+  if [ -n "$SOUND_COMMAND" ]; then
+    if [ "$mode" = "sync" ]; then
+      sh -c "$SOUND_COMMAND" poke-mon-sound "$step_sound" "$step"
+    else
+      sh -c "$SOUND_COMMAND" poke-mon-sound "$step_sound" "$step" >/dev/null 2>&1 &
+    fi
+    return 0
+  fi
+
+  if [ -z "${SSH_TTY:-}" ] && command -v afplay >/dev/null 2>&1 && [ -r "$step_sound" ]; then
+    if [ "$mode" = "sync" ]; then
+      afplay "$step_sound"
+    else
+      afplay "$step_sound" >/dev/null 2>&1 &
+    fi
+  fi
+}
+
+test_sounds() {
+  count="${1:-$(sound_step_count)}"
+
+  case "$count" in
+    ''|*[!0-9]*)
+      count="$(sound_step_count)"
+      ;;
+  esac
+
+  step=0
+  while [ "$step" -lt "$count" ]; do
+    play_sound "$step" sync
+    step=$((step + 1))
+    [ "$step" -lt "$count" ] && sleep 1
+  done
+}
+
 notify() {
   step="${1:-0}"
   notified=0
@@ -163,16 +236,7 @@ EOF
     write_notification_to_stdout
   fi
 
-  case "$PLAY_LOCAL_SOUND" in
-    0|false|FALSE|no|NO|off|OFF)
-      ;;
-    *)
-      step_sound="$(sound_for_step "$step")"
-      if [ -z "${SSH_TTY:-}" ] && command -v afplay >/dev/null 2>&1 && [ -r "$step_sound" ]; then
-        afplay "$step_sound" >/dev/null 2>&1 &
-      fi
-      ;;
-  esac
+  play_sound "$step" async
 }
 
 cancel_existing() {
@@ -225,6 +289,10 @@ main() {
       init_state_dir
       cancel_existing
       : > "$TOKEN_FILE"
+      exit 0
+      ;;
+    --test-sounds)
+      test_sounds "${2:-}"
       exit 0
       ;;
     --worker)
