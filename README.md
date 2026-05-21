@@ -32,6 +32,12 @@ Remote machines do not need SSH access back into your laptop. The script writes
 notification escape sequences to the active terminal, SSH TTY, or tmux client
 TTY, so the local terminal stack can surface the alert.
 
+The hook treats stdout as captured program output by default. It writes terminal
+notification sequences directly to `$SSH_TTY`, a persisted original TTY for
+delayed reminder workers, tmux client TTYs, or an interactive `/dev/tty`.
+Set `REMINDER_STDOUT_FALLBACK=1` only when you explicitly want OSC sequences
+printed to stdout.
+
 ## Features
 
 - Includes the machine name by default: `Codex @ <host>`
@@ -40,6 +46,7 @@ TTY, so the local terminal stack can surface the alert.
 - Cancels stale reminder loops when a new turn ends
 - Can cancel reminder loops when you submit the next prompt
 - Supports remote SSH sessions through terminal escape sequences
+- Persists the original terminal path for delayed reminder workers
 - Supports tmux client TTYs
 - Uses `cmux notify` directly when available
 - Emits configurable terminal notification protocols: `osc777`, `osc9`, `bell`
@@ -167,7 +174,7 @@ Configure behavior with environment variables.
 | `REMINDER_SOUND_FILE` | `/System/Library/Sounds/Ping.aiff` | macOS sound used with `afplay` |
 | `REMINDER_SOUND_FILES` | unset | Space-separated sound sequence for immediate + reminder notifications |
 | `REMINDER_SOUND_COMMAND` | unset | Optional shell command for custom sound playback. Receives sound file as `$1` and reminder step as `$2` |
-| `REMINDER_STDOUT_FALLBACK` | `1` | Set to `0` when stdout has protocol meaning |
+| `REMINDER_STDOUT_FALLBACK` | `0` | Set to `1` to emit terminal notification sequences to stdout when no direct terminal transport is available |
 | `REMINDER_PROTOCOLS` | `osc777 osc9` | Space-separated terminal protocols: `osc777`, `osc9`, `bell` |
 | `REMINDER_CMUX_NOTIFY` | `1` | Set to `0` to skip direct `cmux notify` |
 
@@ -187,6 +194,12 @@ To add a plain terminal bell fallback:
 
 ```toml
 notify = ["env", "REMINDER_PROTOCOLS=osc777 osc9 bell", "/home/YOU/.codex/hooks/poke-mon"]
+```
+
+To deliberately print terminal notification sequences to stdout:
+
+```toml
+notify = ["env", "REMINDER_STDOUT_FALLBACK=1", "/home/YOU/.codex/hooks/poke-mon"]
 ```
 
 To use only a local macOS sound and skip cmux's notification sound:

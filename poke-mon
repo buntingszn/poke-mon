@@ -19,12 +19,13 @@ SOUND_FILE="${REMINDER_SOUND_FILE:-$DEFAULT_SOUND_FILE}"
 SOUND_FILES="${REMINDER_SOUND_FILES:-}"
 SOUND_COMMAND="${REMINDER_SOUND_COMMAND:-}"
 PLAY_LOCAL_SOUND="${REMINDER_PLAY_LOCAL_SOUND:-auto}"
-ALLOW_STDOUT_FALLBACK="${REMINDER_STDOUT_FALLBACK:-1}"
+ALLOW_STDOUT_FALLBACK="${REMINDER_STDOUT_FALLBACK:-0}"
 REMINDER_ONCE="${REMINDER_ONCE:-0}"
 PROTOCOLS="${REMINDER_PROTOCOLS:-$DEFAULT_PROTOCOLS}"
 CMUX_NOTIFY="${REMINDER_CMUX_NOTIFY:-1}"
 PID_FILE=""
 TOKEN_FILE=""
+TTY_FILE=""
 LOG_FILE=""
 
 usage() {
@@ -44,7 +45,7 @@ Environment:
   REMINDER_SOUND_FILE        macOS sound file used by afplay.
   REMINDER_SOUND_FILES       Space-separated sound sequence for immediate + reminders.
   REMINDER_SOUND_COMMAND     Optional command. Receives sound file as $1 and step as $2.
-  REMINDER_STDOUT_FALLBACK   Set to 0 for command hooks where stdout has protocol meaning.
+  REMINDER_STDOUT_FALLBACK   Set to 1 to emit terminal sequences to stdout.
   REMINDER_PROTOCOLS         Space-separated: osc777 osc9 bell. Default: "osc777 osc9"
   REMINDER_CMUX_NOTIFY       Set to 0 to skip direct `cmux notify`.
 EOF
@@ -69,7 +70,43 @@ init_state_dir() {
 
   PID_FILE="$STATE_DIR/reminder.pid"
   TOKEN_FILE="$STATE_DIR/token"
+  TTY_FILE="$STATE_DIR/terminal.tty"
   LOG_FILE="$STATE_DIR/reminder.log"
+}
+
+resolve_notification_tty() {
+  candidate=""
+
+  if [ -n "${SSH_TTY:-}" ]; then
+    candidate="$SSH_TTY"
+  elif command -v tty >/dev/null 2>&1 && tty -s; then
+    candidate="$(tty 2>/dev/null || true)"
+  fi
+
+  [ -n "$candidate" ] || return 1
+  [ "$candidate" != "not a tty" ] || return 1
+  [ -w "$candidate" ] || return 1
+
+  printf '%s' "$candidate"
+}
+
+persist_notification_tty() {
+  if ! resolved_tty="$(resolve_notification_tty)"; then
+    rm -f "$TTY_FILE" 2>/dev/null || true
+    return 0
+  fi
+
+  printf '%s\n' "$resolved_tty" > "$TTY_FILE" 2>/dev/null || true
+}
+
+read_persisted_tty() {
+  [ -f "$TTY_FILE" ] || return 1
+
+  persisted_tty="$(cat "$TTY_FILE" 2>/dev/null || true)"
+  [ -n "$persisted_tty" ] || return 1
+  [ -w "$persisted_tty" ] || return 1
+
+  printf '%s' "$persisted_tty"
 }
 
 sanitize_osc_field() {
@@ -218,6 +255,11 @@ notify() {
     write_notification_to_tty "$SSH_TTY" && notified=1
   fi
 
+  persisted_tty="$(read_persisted_tty)" || persisted_tty=""
+  if [ -n "$persisted_tty" ] && [ "$persisted_tty" != "${SSH_TTY:-}" ]; then
+    write_notification_to_tty "$persisted_tty" && notified=1
+  fi
+
   if command -v tmux >/dev/null 2>&1; then
     while IFS= read -r client_tty; do
       [ -n "$client_tty" ] || continue
@@ -228,7 +270,7 @@ EOF
     tmux display-message "$TITLE: $MESSAGE" 2>/dev/null || true
   fi
 
-  if [ "$notified" -eq 0 ] && [ -w /dev/tty ]; then
+  if [ "$notified" -eq 0 ] && command -v tty >/dev/null 2>&1 && tty -s && [ -w /dev/tty ]; then
     write_notification_to_tty /dev/tty && notified=1
   fi
 
@@ -304,12 +346,15 @@ main() {
 
   case "$REMINDER_ONCE" in
     1|true|TRUE|yes|YES|on|ON)
+      init_state_dir
+      persist_notification_tty
       notify 0
       exit 0
       ;;
   esac
 
   init_state_dir
+  persist_notification_tty
   cancel_existing
   token="$(date +%s)-$$"
   printf '%s\n' "$token" > "$TOKEN_FILE"
