@@ -121,6 +121,7 @@ Configure behavior with environment variables.
 | `REMINDER_STATE_DIR` | `$XDG_STATE_HOME/poke-mon` or `~/.local/state/poke-mon` | State directory for token, PID, and log files |
 | `REMINDER_PLAY_LOCAL_SOUND` | `auto` | Set to `0`, `false`, `no`, or `off` to disable local sound |
 | `REMINDER_SOUND_FILE` | `/System/Library/Sounds/Ping.aiff` | macOS sound used with `afplay` |
+| `REMINDER_SOUND_FILES` | unset | Space-separated sound sequence for immediate + reminder notifications |
 | `REMINDER_STDOUT_FALLBACK` | `1` | Set to `0` when stdout has protocol meaning |
 | `REMINDER_PROTOCOLS` | `osc777 osc9` | Space-separated terminal protocols: `osc777`, `osc9`, `bell` |
 | `REMINDER_CMUX_NOTIFY` | `1` | Set to `0` to skip direct `cmux notify` |
@@ -148,6 +149,15 @@ To use only a local macOS sound and skip cmux's notification sound:
 ```toml
 notify = ["env", "REMINDER_CMUX_NOTIFY=0", "REMINDER_PROTOCOLS=", "REMINDER_SOUND_FILE=/System/Library/Sounds/Morse.aiff", "/Users/YOU/.codex/hooks/poke-mon"]
 ```
+
+To make later reminders progressively more noticeable:
+
+```toml
+notify = ["env", "REMINDER_CMUX_NOTIFY=0", "REMINDER_PROTOCOLS=", "REMINDER_SOUND_FILES=/System/Library/Sounds/Tink.aiff /System/Library/Sounds/Tink.aiff /System/Library/Sounds/Pop.aiff /System/Library/Sounds/Funk.aiff /System/Library/Sounds/Sosumi.aiff", "/Users/YOU/.codex/hooks/poke-mon"]
+```
+
+When there are more reminders than listed sounds, the final listed sound is
+reused.
 
 ## tmux
 
