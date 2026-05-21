@@ -1,11 +1,16 @@
 # poke-mon
 
 ```text
-      [o_o]
-   /|  POKE  |\
-    |  MON   |
-   / \______ /\
-      _/  \_
+      .oO[ P O K E - M O N ]Oo.
+   .--------------------------------.
+   |  ____   ___  _  __ _____       |
+   | |  _ \ / _ \| |/ /| ____|      |
+   | | |_) | | | | ' / |  _|        |
+   | |  __/| |_| | . \ | |___       |
+   | |_|    \___/|_|\_\|_____|      |
+   |        - M O N -               |
+   '--------------------------------'
+        [::] reminder unit online [::]
 ```
 
 A small `notify` hook for the OpenAI Codex CLI. It sends a terminal
