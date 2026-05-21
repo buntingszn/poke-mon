@@ -12,7 +12,7 @@ SHORT_HOST="$(hostname -s 2>/dev/null || hostname 2>/dev/null || printf 'unknown
 TITLE="${REMINDER_TITLE:-Codex @ $SHORT_HOST}"
 MESSAGE="${REMINDER_MESSAGE:-Turn ended}"
 DELAYS="${REMINDER_DELAYS:-$DEFAULT_DELAYS}"
-STATE_DIR="${REMINDER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/codex-turn-ended-reminder}"
+STATE_DIR="${REMINDER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/poke-mon}"
 SOUND_FILE="${REMINDER_SOUND_FILE:-/System/Library/Sounds/Ping.aiff}"
 PLAY_LOCAL_SOUND="${REMINDER_PLAY_LOCAL_SOUND:-auto}"
 ALLOW_STDOUT_FALLBACK="${REMINDER_STDOUT_FALLBACK:-1}"
@@ -24,7 +24,7 @@ LOG_FILE=""
 
 usage() {
   cat <<'EOF'
-Usage: codex-turn-ended-reminder [--cancel | --worker TOKEN | --help]
+Usage: poke-mon [--cancel | --worker TOKEN | --help]
 
 Codex notify hook for terminal-based turn-ended reminders.
 
@@ -45,7 +45,7 @@ init_state_dir() {
   if mkdir -p "$STATE_DIR" 2>/dev/null; then
     :
   else
-    STATE_DIR="${TMPDIR:-/tmp}/codex-turn-ended-reminder-${UID:-user}"
+    STATE_DIR="${TMPDIR:-/tmp}/poke-mon-${UID:-user}"
     mkdir -p "$STATE_DIR" 2>/dev/null || exit 1
   fi
 

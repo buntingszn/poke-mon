@@ -1,4 +1,4 @@
-# codex-turn-ended-reminder
+# poke-mon
 
 A small `notify` hook for the OpenAI Codex CLI. It sends a terminal
 notification when Codex is waiting for you, then gently re-notifies on a
@@ -32,8 +32,8 @@ Clone this repo on the machine where Codex runs, then install the hook:
 
 ```bash
 mkdir -p ~/.codex/hooks
-cp ./codex-turn-ended-reminder ~/.codex/hooks/codex-turn-ended-reminder
-chmod +x ~/.codex/hooks/codex-turn-ended-reminder
+cp ./poke-mon ~/.codex/hooks/poke-mon
+chmod +x ~/.codex/hooks/poke-mon
 ```
 
 Add the hook to `~/.codex/config.toml`.
@@ -41,13 +41,13 @@ Add the hook to `~/.codex/config.toml`.
 Linux:
 
 ```toml
-notify = ["/home/YOU/.codex/hooks/codex-turn-ended-reminder"]
+notify = ["/home/YOU/.codex/hooks/poke-mon"]
 ```
 
 macOS:
 
 ```toml
-notify = ["/Users/YOU/.codex/hooks/codex-turn-ended-reminder"]
+notify = ["/Users/YOU/.codex/hooks/poke-mon"]
 ```
 
 Replace `YOU` with the username on that machine, then restart Codex.
@@ -58,10 +58,10 @@ From the repo directory:
 
 ```bash
 mkdir -p ~/.codex/hooks
-cp ./codex-turn-ended-reminder ~/.codex/hooks/codex-turn-ended-reminder
-chmod +x ~/.codex/hooks/codex-turn-ended-reminder
+cp ./poke-mon ~/.codex/hooks/poke-mon
+chmod +x ~/.codex/hooks/poke-mon
 
-HOOK_PATH="$HOME/.codex/hooks/codex-turn-ended-reminder"
+HOOK_PATH="$HOME/.codex/hooks/poke-mon"
 
 printf '\nAdd this to ~/.codex/config.toml:\n\n'
 printf 'notify = ["%s"]\n' "$HOOK_PATH"
@@ -86,7 +86,7 @@ Linux:
         "hooks": [
           {
             "type": "command",
-            "command": "env REMINDER_MESSAGE='Waiting for input' REMINDER_ONCE=1 REMINDER_STDOUT_FALLBACK=0 /home/YOU/.codex/hooks/codex-turn-ended-reminder"
+            "command": "env REMINDER_MESSAGE='Waiting for input' REMINDER_ONCE=1 REMINDER_STDOUT_FALLBACK=0 /home/YOU/.codex/hooks/poke-mon"
           }
         ]
       }
@@ -98,7 +98,7 @@ Linux:
 macOS command path:
 
 ```json
-"command": "env REMINDER_MESSAGE='Waiting for input' REMINDER_ONCE=1 REMINDER_STDOUT_FALLBACK=0 /Users/YOU/.codex/hooks/codex-turn-ended-reminder"
+"command": "env REMINDER_MESSAGE='Waiting for input' REMINDER_ONCE=1 REMINDER_STDOUT_FALLBACK=0 /Users/YOU/.codex/hooks/poke-mon"
 ```
 
 If `hooks.json` already exists, keep its existing entries and add only the
@@ -118,7 +118,7 @@ Configure behavior with environment variables.
 | `REMINDER_MESSAGE` | `Turn ended` | Notification body |
 | `REMINDER_DELAYS` | `120 180 300 600 1200` | Reminder delays, in seconds |
 | `REMINDER_ONCE` | `0` | Set to `1` to send only the immediate notification |
-| `REMINDER_STATE_DIR` | `$XDG_STATE_HOME/codex-turn-ended-reminder` or `~/.local/state/codex-turn-ended-reminder` | State directory for token, PID, and log files |
+| `REMINDER_STATE_DIR` | `$XDG_STATE_HOME/poke-mon` or `~/.local/state/poke-mon` | State directory for token, PID, and log files |
 | `REMINDER_PLAY_LOCAL_SOUND` | `auto` | Set to `0`, `false`, `no`, or `off` to disable local sound |
 | `REMINDER_SOUND_FILE` | `/System/Library/Sounds/Ping.aiff` | macOS sound used with `afplay` |
 | `REMINDER_STDOUT_FALLBACK` | `1` | Set to `0` when stdout has protocol meaning |
@@ -127,19 +127,19 @@ Configure behavior with environment variables.
 Example custom `notify` config:
 
 ```toml
-notify = ["env", "REMINDER_MESSAGE=Waiting for input", "REMINDER_DELAYS=60 180 600", "/home/YOU/.codex/hooks/codex-turn-ended-reminder"]
+notify = ["env", "REMINDER_MESSAGE=Waiting for input", "REMINDER_DELAYS=60 180 600", "/home/YOU/.codex/hooks/poke-mon"]
 ```
 
 To use only cmux notifications:
 
 ```toml
-notify = ["env", "REMINDER_PROTOCOLS=osc777", "/home/YOU/.codex/hooks/codex-turn-ended-reminder"]
+notify = ["env", "REMINDER_PROTOCOLS=osc777", "/home/YOU/.codex/hooks/poke-mon"]
 ```
 
 To add a plain terminal bell fallback:
 
 ```toml
-notify = ["env", "REMINDER_PROTOCOLS=osc777 osc9 bell", "/home/YOU/.codex/hooks/codex-turn-ended-reminder"]
+notify = ["env", "REMINDER_PROTOCOLS=osc777 osc9 bell", "/home/YOU/.codex/hooks/poke-mon"]
 ```
 
 ## tmux
@@ -162,7 +162,7 @@ tmux source-file ~/.tmux.conf
 Run the installed hook:
 
 ```bash
-~/.codex/hooks/codex-turn-ended-reminder
+~/.codex/hooks/poke-mon
 ```
 
 Test only the terminal notification sequence:
@@ -180,13 +180,13 @@ printf '\e]9;Codex: Remote test\a'
 Cancel any active reminder loop:
 
 ```bash
-~/.codex/hooks/codex-turn-ended-reminder --cancel
+~/.codex/hooks/poke-mon --cancel
 ```
 
 Show script help:
 
 ```bash
-~/.codex/hooks/codex-turn-ended-reminder --help
+~/.codex/hooks/poke-mon --help
 ```
 
 ## Notes
