@@ -13,9 +13,17 @@
         [::] reminder unit online [::]
 ```
 
-A small `notify` hook for the OpenAI Codex CLI. It sends a terminal
-notification when Codex is waiting for you, then gently re-notifies on a
-tapering schedule.
+`poke-mon` exists because coding sessions are easy to drift away from. Codex
+finishes a turn, asks for approval, or waits for the next prompt, and ten
+minutes later you realize the session has been sitting idle the whole time.
+
+This hook uses native macOS system sounds, terminal notifications, or both to
+gently nudge you back when Codex needs your attention. The first nudge can be
+subtle, and later reminders can taper into more noticeable sounds if you are
+actually away from the keyboard.
+
+It is intentionally small: a single shell script you can drop into
+`~/.codex/hooks`.
 
 The hook was designed for cmux and uses cmux's `OSC 777` notification sequence
 by default. It also emits a best-effort `OSC 9` terminal notification sequence,
