@@ -1,5 +1,13 @@
 # poke-mon
 
+```text
+      [o_o]
+   /|  POKE  |\
+    |  MON   |
+   / \______ /\
+      _/  \_
+```
+
 A small `notify` hook for the OpenAI Codex CLI. It sends a terminal
 notification when Codex is waiting for you, then gently re-notifies on a
 tapering schedule.
