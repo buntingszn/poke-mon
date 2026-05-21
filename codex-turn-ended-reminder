@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+set -u
+
+# Codex notify hook that sends a terminal notification immediately, then gently
+# repeats on a tapering schedule. Designed for cmux, with best-effort terminal
+# notification fallbacks for other terminal emulators.
+
+readonly DEFAULT_DELAYS="120 180 300 600 1200"
+readonly DEFAULT_PROTOCOLS="osc777 osc9"
+
+SHORT_HOST="$(hostname -s 2>/dev/null || hostname 2>/dev/null || printf 'unknown-host')"
+TITLE="${REMINDER_TITLE:-Codex @ $SHORT_HOST}"
+MESSAGE="${REMINDER_MESSAGE:-Turn ended}"
+DELAYS="${REMINDER_DELAYS:-$DEFAULT_DELAYS}"
+STATE_DIR="${REMINDER_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/codex-turn-ended-reminder}"
+SOUND_FILE="${REMINDER_SOUND_FILE:-/System/Library/Sounds/Ping.aiff}"
+PLAY_LOCAL_SOUND="${REMINDER_PLAY_LOCAL_SOUND:-auto}"
+ALLOW_STDOUT_FALLBACK="${REMINDER_STDOUT_FALLBACK:-1}"
+REMINDER_ONCE="${REMINDER_ONCE:-0}"
+PROTOCOLS="${REMINDER_PROTOCOLS:-$DEFAULT_PROTOCOLS}"
+PID_FILE=""
+TOKEN_FILE=""
+LOG_FILE=""
+
+usage() {
+  cat <<'EOF'
+Usage: codex-turn-ended-reminder [--cancel | --worker TOKEN | --help]
+
+Codex notify hook for terminal-based turn-ended reminders.
+
+Environment:
+  REMINDER_TITLE             Notification title. Default: "Codex @ <host>"
+  REMINDER_MESSAGE           Notification body. Default: "Turn ended"
+  REMINDER_DELAYS            Reminder delays in seconds. Default: "120 180 300 600 1200"
+  REMINDER_ONCE              Set to 1 to notify once without starting reminders.
+  REMINDER_STATE_DIR         State directory. Default: $XDG_STATE_HOME or ~/.local/state
+  REMINDER_PLAY_LOCAL_SOUND  auto, 0, false, no, or off. Default: auto
+  REMINDER_SOUND_FILE        macOS sound file used by afplay.
+  REMINDER_STDOUT_FALLBACK   Set to 0 for command hooks where stdout has protocol meaning.
+  REMINDER_PROTOCOLS         Space-separated: osc777 osc9 bell. Default: "osc777 osc9"
+EOF
+}
+
+init_state_dir() {
+  if mkdir -p "$STATE_DIR" 2>/dev/null; then
+    :
+  else
+    STATE_DIR="${TMPDIR:-/tmp}/codex-turn-ended-reminder-${UID:-user}"
+    mkdir -p "$STATE_DIR" 2>/dev/null || exit 1
+  fi
+
+  PID_FILE="$STATE_DIR/reminder.pid"
+  TOKEN_FILE="$STATE_DIR/token"
+  LOG_FILE="$STATE_DIR/reminder.log"
+}
+
+sanitize_osc_field() {
+  value="$1"
+  value="${value//$'\033'/}"
+  value="${value//$'\007'/}"
+  value="${value//$'\r'/ }"
+  value="${value//$'\n'/ }"
+  value="${value//;/ -}"
+  printf '%s' "$value"
+}
+
+notification_sequence() {
+  protocol="$1"
+  title="$2"
+  message="$3"
+
+  case "$protocol" in
+    osc777)
+      # cmux-compatible desktop notification escape sequence.
+      printf '\033]777;notify;%s;%s\007' "$title" "$message"
+      ;;
+    osc9)
+      # Best-effort terminal notification sequence supported by some terminals.
+      printf '\033]9;%s: %s\007' "$title" "$message"
+      ;;
+    bell|bel)
+      printf '\007'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+write_notification_to_tty() {
+  target_tty="$1"
+  title="$(sanitize_osc_field "$TITLE")"
+  message="$(sanitize_osc_field "$MESSAGE")"
+  wrote=0
+
+  [ -n "$target_tty" ] || return 1
+  [ -w "$target_tty" ] || return 1
+
+  for protocol in $PROTOCOLS; do
+    notification_sequence "$protocol" "$title" "$message" > "$target_tty" 2>/dev/null && wrote=1
+  done
+
+  [ "$wrote" -eq 1 ]
+}
+
+write_notification_to_stdout() {
+  title="$(sanitize_osc_field "$TITLE")"
+  message="$(sanitize_osc_field "$MESSAGE")"
+
+  for protocol in $PROTOCOLS; do
+    notification_sequence "$protocol" "$title" "$message"
+  done
+}
+
+notify() {
+  notified=0
+
+  if command -v cmux >/dev/null 2>&1; then
+    cmux notify --title "$TITLE" --body "$MESSAGE" >/dev/null 2>&1 && notified=1
+  fi
+
+  if [ -n "${SSH_TTY:-}" ]; then
+    write_notification_to_tty "$SSH_TTY" && notified=1
+  fi
+
+  if command -v tmux >/dev/null 2>&1; then
+    while IFS= read -r client_tty; do
+      [ -n "$client_tty" ] || continue
+      write_notification_to_tty "$client_tty" && notified=1
+    done <<EOF
+$(tmux list-clients -F '#{client_tty}' 2>/dev/null || true)
+EOF
+    tmux display-message "$TITLE: $MESSAGE" 2>/dev/null || true
+  fi
+
+  if [ "$notified" -eq 0 ] && [ -w /dev/tty ]; then
+    write_notification_to_tty /dev/tty && notified=1
+  fi
+
+  if [ "$notified" -eq 0 ] && [ "$ALLOW_STDOUT_FALLBACK" != "0" ]; then
+    write_notification_to_stdout
+  fi
+
+  case "$PLAY_LOCAL_SOUND" in
+    0|false|FALSE|no|NO|off|OFF)
+      ;;
+    *)
+      if [ -z "${SSH_TTY:-}" ] && command -v afplay >/dev/null 2>&1 && [ -r "$SOUND_FILE" ]; then
+        afplay "$SOUND_FILE" >/dev/null 2>&1 &
+      fi
+      ;;
+  esac
+}
+
+cancel_existing() {
+  if [ -f "$PID_FILE" ]; then
+    old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+    if [ -n "${old_pid:-}" ] && kill -0 "$old_pid" 2>/dev/null; then
+      kill "$old_pid" 2>/dev/null || true
+    fi
+  fi
+}
+
+run_worker() {
+  token="${1:-}"
+  [ -n "$token" ] || exit 1
+
+  for delay in $DELAYS; do
+    case "$delay" in
+      ''|*[!0-9]*)
+        continue
+        ;;
+    esac
+
+    sleep "$delay"
+    [ "$(cat "$TOKEN_FILE" 2>/dev/null || true)" = "$token" ] || exit 0
+    notify
+  done
+}
+
+start_worker() {
+  token="$1"
+
+  if command -v setsid >/dev/null 2>&1; then
+    setsid "$0" --worker "$token" >>"$LOG_FILE" 2>&1 &
+  else
+    nohup "$0" --worker "$token" >>"$LOG_FILE" 2>&1 &
+  fi
+
+  printf '%s\n' "$!" > "$PID_FILE"
+}
+
+main() {
+  init_state_dir
+
+  case "${1:-}" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --cancel)
+      cancel_existing
+      : > "$TOKEN_FILE"
+      exit 0
+      ;;
+    --worker)
+      run_worker "${2:-}"
+      exit 0
+      ;;
+  esac
+
+  cancel_existing
+  token="$(date +%s)-$$"
+  printf '%s\n' "$token" > "$TOKEN_FILE"
+
+  notify
+
+  case "$REMINDER_ONCE" in
+    1|true|TRUE|yes|YES|on|ON)
+      ;;
+    *)
+      start_worker "$token"
+      ;;
+  esac
+}
+
+main "$@"
