@@ -18,6 +18,7 @@ PLAY_LOCAL_SOUND="${REMINDER_PLAY_LOCAL_SOUND:-auto}"
 ALLOW_STDOUT_FALLBACK="${REMINDER_STDOUT_FALLBACK:-1}"
 REMINDER_ONCE="${REMINDER_ONCE:-0}"
 PROTOCOLS="${REMINDER_PROTOCOLS:-$DEFAULT_PROTOCOLS}"
+CMUX_NOTIFY="${REMINDER_CMUX_NOTIFY:-1}"
 PID_FILE=""
 TOKEN_FILE=""
 LOG_FILE=""
@@ -38,6 +39,7 @@ Environment:
   REMINDER_SOUND_FILE        macOS sound file used by afplay.
   REMINDER_STDOUT_FALLBACK   Set to 0 for command hooks where stdout has protocol meaning.
   REMINDER_PROTOCOLS         Space-separated: osc777 osc9 bell. Default: "osc777 osc9"
+  REMINDER_CMUX_NOTIFY       Set to 0 to skip direct `cmux notify`.
 EOF
 }
 
@@ -115,7 +117,7 @@ write_notification_to_stdout() {
 notify() {
   notified=0
 
-  if command -v cmux >/dev/null 2>&1; then
+  if [ "$CMUX_NOTIFY" != "0" ] && command -v cmux >/dev/null 2>&1; then
     cmux notify --title "$TITLE" --body "$MESSAGE" >/dev/null 2>&1 && notified=1
   fi
 
@@ -191,37 +193,38 @@ start_worker() {
 }
 
 main() {
-  init_state_dir
-
   case "${1:-}" in
     --help|-h)
       usage
       exit 0
       ;;
     --cancel)
+      init_state_dir
       cancel_existing
       : > "$TOKEN_FILE"
       exit 0
       ;;
     --worker)
+      init_state_dir
       run_worker "${2:-}"
       exit 0
       ;;
   esac
 
+  case "$REMINDER_ONCE" in
+    1|true|TRUE|yes|YES|on|ON)
+      notify
+      exit 0
+      ;;
+  esac
+
+  init_state_dir
   cancel_existing
   token="$(date +%s)-$$"
   printf '%s\n' "$token" > "$TOKEN_FILE"
 
   notify
-
-  case "$REMINDER_ONCE" in
-    1|true|TRUE|yes|YES|on|ON)
-      ;;
-    *)
-      start_worker "$token"
-      ;;
-  esac
+  start_worker "$token"
 }
 
 main "$@"

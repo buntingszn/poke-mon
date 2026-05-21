@@ -123,6 +123,7 @@ Configure behavior with environment variables.
 | `REMINDER_SOUND_FILE` | `/System/Library/Sounds/Ping.aiff` | macOS sound used with `afplay` |
 | `REMINDER_STDOUT_FALLBACK` | `1` | Set to `0` when stdout has protocol meaning |
 | `REMINDER_PROTOCOLS` | `osc777 osc9` | Space-separated terminal protocols: `osc777`, `osc9`, `bell` |
+| `REMINDER_CMUX_NOTIFY` | `1` | Set to `0` to skip direct `cmux notify` |
 
 Example custom `notify` config:
 
@@ -140,6 +141,12 @@ To add a plain terminal bell fallback:
 
 ```toml
 notify = ["env", "REMINDER_PROTOCOLS=osc777 osc9 bell", "/home/YOU/.codex/hooks/poke-mon"]
+```
+
+To use only a local macOS sound and skip cmux's notification sound:
+
+```toml
+notify = ["env", "REMINDER_CMUX_NOTIFY=0", "REMINDER_PROTOCOLS=", "REMINDER_SOUND_FILE=/System/Library/Sounds/Morse.aiff", "/Users/YOU/.codex/hooks/poke-mon"]
 ```
 
 ## tmux
